@@ -6,10 +6,8 @@ import requests as http_requests
 
 app = Flask(__name__)
 
-# In-memory key-value store
 store = {}
 
-# Configuration from environment
 NODE_NAME = os.environ.get("NODE_NAME", "node1")
 PEERS = [p for p in os.environ.get("PEERS", "").split(",") if p]
 MODE = os.environ.get("MODE", "CP")
@@ -62,7 +60,7 @@ def put_data(key):
                     )
                 replicated_peers.append(peer)
             except http_requests.exceptions.RequestException:
-                # Roll back peers that already accepted the write
+                # roll back the peers that accepted the write op
                 for done_peer in replicated_peers:
                     try:
                         http_requests.post(
@@ -77,13 +75,11 @@ def put_data(key):
                     except http_requests.exceptions.RequestException:
                         pass
 
-                # Do NOT write to node1's store
                 return jsonify({
                     "error": f"Replication failed; rolled back {replicated_peers}",
                     "reason": "Write rejected to maintain consistency (CP mode)",
                 }), 503
 
-        # Only reached if EVERY peer succeeded
         store[key] = value
         return jsonify({
             "status": "ok",
@@ -131,3 +127,31 @@ def rollback():
         store.pop(key, None)
 
     return jsonify({"status": "rolled_back", "node": NODE_NAME})
+
+
+@app.route("/replicate", methods=["POST"])
+def replicate():
+    key = request.json.get("key")
+    value = request.json.get("value")
+    store[key] = value
+    return jsonify({"status": "ok", "node": NODE_NAME})
+
+
+@app.route("/mode", methods=["GET"])
+def get_mode():
+    return jsonify({"node": NODE_NAME, "mode": MODE})
+
+
+@app.route("/mode", methods=["POST"])
+def set_mode():
+    global MODE
+    new_mode = request.json.get("mode", "").upper()
+    if new_mode in ("CP", "AP"):
+        MODE = new_mode
+        return jsonify({"status": "ok", "node": NODE_NAME, "mode": MODE})
+    return jsonify({"error": "Mode must be CP or AP"}), 400
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
