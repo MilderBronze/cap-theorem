@@ -1,0 +1,2 @@
+docker compose file is not a necessity. it inherently calls the docker network and docker run commands.
+once you have the image built, all you need is call docker run with right port mappings, network, volume attached. Docker compose is a similar wrapper built for convenience. It under the hood does the same things.
